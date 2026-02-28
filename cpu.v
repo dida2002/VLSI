@@ -1,3 +1,4 @@
+
 module cpu #(
     parameter ADDR_WIDTH = 6,
     parameter DATA_WIDTH = 16
@@ -76,6 +77,7 @@ module cpu #(
     localparam fetch_3 = 4;
     localparam fetch_4 = 5;
     localparam in_0 = 10;
+    localparam in_11 = 45;
     localparam in_1 = 11;
     localparam in_2 = 12;
     localparam in_3 = 13;
@@ -90,6 +92,21 @@ module cpu #(
     localparam out_5 = 35;
     localparam out_6 = 36;
     localparam out_7 = 37;
+
+    localparam mov_0 = 49;
+    localparam mov_1 = 50;
+    localparam mov_2 = 51;
+    localparam mov_3 = 52;
+    localparam mov_4 = 53;
+    localparam mov_5 = 54;
+    localparam mov_6 = 55;
+    localparam mov_7 = 56;
+    localparam mov_8 = 57;
+    localparam mov_9 = 58;
+    localparam mov_10 = 59;
+    localparam mov_11 = 60;
+    localparam mov_12 = 61;
+    localparam mov_13 = 62;
 
     localparam error = 255;
 
@@ -201,16 +218,22 @@ module cpu #(
                     OUT: begin
                         state_next = out_0;
                     end
+                    MOV: begin
+                        state_next = mov_0;
+                    end
                     default: state_next = error;
                 endcase
             end
             in_0: begin
                 a_in = in;
                 a_ld = 1;
+                state_next = in_11;
+            end
+            in_11: begin
                 mar_in = operandX_addr;
                 mar_ld = 1;
                 if (operandX_indirect == 0) begin
-                    mdr_in = in;
+                    mdr_in = a_out;
                     mdr_ld = 1;
 
                     state_next = in_1;
@@ -239,7 +262,7 @@ module cpu #(
                 state_next = in_6;
             end
             in_6: begin
-                mar_in = {{(DATA_WIDTH-3){1'b0}}, data[2:0]};
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
                 mar_ld = 1;
                 mdr_in = a_out;
                 mdr_ld = 1;
@@ -257,6 +280,23 @@ module cpu #(
             out_2: begin
                 mdr_in = mem;
                 mdr_ld = 1;
+                if (operandX_indirect) begin
+                    state_next = out_5;
+                end else begin
+                    state_next = out_3;
+                end
+            end
+            out_5: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
+                mar_ld = 1;
+                state_next = out_6;
+            end
+            out_6: begin
+                state_next = out_7;
+            end
+            out_7: begin
+                mdr_in = mem;
+                mdr_ld = 1;
                 state_next = out_3;
             end
             out_3: begin
@@ -272,13 +312,55 @@ module cpu #(
                 state_next = fetch_0;
             end
 
+            mov_0: begin
+                if (operandZ_addr == 3'b000 && operandZ_indirect == 1'b0) begin
+                    state_next = mov_1;
+                end else begin
+                    state_next = error;
+                end
+            end
+            mov_1: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, operandY_addr};
+                mar_ld = 1;
+                state_next = mov_2;
+            end
+            mov_2: begin
+                state_next = mov_3;
+            end
+            mov_3: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                if (operandY_indirect == 0) begin
+                    state_next = mov_4;
+                end else begin
+                    state_next = mov_5;
+                end
+            end
+            mov_4: begin
+                a_in = data;
+                a_ld = 1;
+                state_next = in_11;
+            end
+            mov_5: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
+                mar_ld = 1;
+                state_next = mov_6;
+            end
+            mov_6: begin
+                state_next = mov_7;
+            end
+            mov_7: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                state_next = mov_4;
+            end
             error: begin
                 out_next = 10'b1100000000;
-                state_next = 254;
+                state_next = error;
             end
             default: begin
                 out_next = 10'b1010101010;
-                state_next = error;
+                state_next = 254;
             end
         endcase
 
