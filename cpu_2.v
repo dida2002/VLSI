@@ -37,7 +37,7 @@ module cpu #(
     wire operandZ_indirect = ir_out[3];
     wire [2:0] operandZ_addr = ir_out[2:0];
     wire [DATA_WIDTH-1:0] constant = ir_out[DATA_WIDTH*2-1:DATA_WIDTH];
-    localparam MOV=4'h00, ADD=4'h01, SUB=4'h02, MUL=4'h03, DIV=4'h04, IN=4'h07, OUT=4'h08;
+    localparam MOV=4'h00, ADD=4'h1, SUB=4'h2, MUL=4'h3, DIV=4'h4, IN=4'h7, OUT=4'h8, STOP=4'hf;
 
     // MAR
     reg mar_cl, mar_ld, mar_inc, mar_dec, mar_sr, mar_ir, mar_sl, mar_il;
@@ -144,6 +144,17 @@ module cpu #(
     localparam add_exec_1 = 121;
     localparam add_exec_2 = 122;
 
+    localparam stop_0 = 140;
+    localparam stop_1 = 141;
+    localparam stop_2 = 142;
+    localparam stop_3 = 143;
+    localparam stop_4 = 144;
+    localparam stop_5 = 145;
+    localparam stop_6 = 146;
+    localparam stop_7 = 147;
+    localparam stop_8 = 148;
+    localparam stop_9 = 159;
+
     localparam error8 = 247;
     localparam error7 = 248;
     localparam error6 = 249;
@@ -231,7 +242,7 @@ module cpu #(
                 state_next = fetch_0;
             end
             fetch_0: begin
-                out_next = 0;
+                //out_next = 0;
                 mar_in = pc;
                 mar_ld = 1;
                 pc_inc = 1;
@@ -268,9 +279,14 @@ module cpu #(
                     ADD,SUB,MUL: begin
                         state_next = add_decode_Y_0;
                     end
+                    STOP: begin
+                        state_next = stop_0;
+                    end
                     default: state_next = error;
                 endcase
             end
+
+
 
 
 
@@ -353,11 +369,16 @@ module cpu #(
                 mdr_ld = 1;
                 state_next = out_3;
             end
+
+
             out_3: begin
                 a_in = data;
                 a_ld = 1;
-
-                state_next = out_4;
+                if (opcode == STOP) begin
+                    state_next = stop_1;
+                end else begin
+                    state_next = out_4;
+                end
             end
 
             out_4: begin
@@ -397,7 +418,11 @@ module cpu #(
             mov_4: begin
                 a_in = data;
                 a_ld = 1;
-                state_next = in_11;
+                if (opcode == STOP) begin
+                    state_next = stop_3;
+                end else begin
+                    state_next = in_11;
+                end
             end
             mov_5: begin
                 mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
@@ -505,7 +530,6 @@ module cpu #(
             add_exec_0: begin
                 //out_next = a_out;
                 oc = opcode[2:0] - 1;
-
                 state_next = add_exec_1;
             end
             add_exec_1: begin
@@ -519,6 +543,38 @@ module cpu #(
                 //out_next = a_out;
                 state_next = in_11;
             end
+
+
+            stop_0: begin
+                if (operandX_addr != 0 || operandX_indirect != 0) begin
+                    state_next = out_0;
+                end else begin
+                    state_next = stop_2;
+                end
+            end
+
+            stop_1: begin
+                out_next = a_out;
+                state_next = stop_2;
+            end
+
+            stop_2: begin
+                if (operandY_addr != 0 || operandY_indirect != 0) begin
+                    state_next = mov_1;
+                end else begin
+                    state_next = stop_4;
+                end
+            end
+
+            stop_3: begin
+                out_next = a_out;
+                state_next = stop_4;
+            end
+
+            stop_4: begin
+                state_next = stop_4;
+            end
+
 
 
 
