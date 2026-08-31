@@ -7,6 +7,8 @@ module cpu #(
     input rst_n,
     input [DATA_WIDTH-1:0] mem,
     input [DATA_WIDTH-1:0] in,
+    input control,
+    output reg status,
     output we,
     output [ADDR_WIDTH-1:0] addr,
     output [DATA_WIDTH-1:0] data,
@@ -14,15 +16,17 @@ module cpu #(
     output [ADDR_WIDTH-1:0] pc,
     output [ADDR_WIDTH-1:0] sp
 );
-    
+    // PC
     reg pc_cl, pc_ld, pc_inc, pc_dec, pc_sr, pc_ir, pc_sl, pc_il;
     reg [ADDR_WIDTH-1:0] pc_in;
     register #(ADDR_WIDTH) pc_inst (clk, rst_n, pc_cl, pc_ld, pc_in, pc_inc, pc_dec, pc_sr, pc_ir, pc_sl, pc_il, pc);
 
+    // SP
     reg sp_cl, sp_ld, sp_inc, sp_dec, sp_sr, sp_ir, sp_sl, sp_il;
     reg [ADDR_WIDTH-1:0] sp_in;
     register #(ADDR_WIDTH) sp_inst (clk, rst_n, sp_cl, sp_ld, sp_in, sp_inc, sp_dec, sp_sr, sp_ir, sp_sl, sp_il, sp);
 
+    // IR
     reg ir_cl, ir_ld, ir_inc, ir_dec, ir_sr, ir_ir, ir_sl, ir_il;
     reg [DATA_WIDTH*2-1:0] ir_in;
     wire [DATA_WIDTH*2-1:0] ir_out;
@@ -35,23 +39,36 @@ module cpu #(
     wire operandZ_indirect = ir_out[3];
     wire [2:0] operandZ_addr = ir_out[2:0];
     wire [DATA_WIDTH-1:0] constant = ir_out[DATA_WIDTH*2-1:DATA_WIDTH];
-    localparam MOV=4'h00, ADD=4'h01, SUB=4'h02, MUL=4'h03, DIV=4'h04, IN=4'h07, OUT=4'h08;
+    localparam MOV=4'h00, ADD=4'h1, SUB=4'h2, MUL=4'h3, DIV=4'h4, IN=4'h7, OUT=4'h8, STOP=4'hf;
 
+    // MAR
     reg mar_cl, mar_ld, mar_inc, mar_dec, mar_sr, mar_ir, mar_sl, mar_il;
     reg [ADDR_WIDTH-1:0] mar_in;
     register #(ADDR_WIDTH) mar_inst (clk, rst_n, mar_cl, mar_ld, mar_in, mar_inc, mar_dec, mar_sr, mar_ir, mar_sl, mar_il, addr);
 
+    // MDR
     reg mdr_cl, mdr_ld, mdr_inc, mdr_dec, mdr_sr, mdr_ir, mdr_sl, mdr_il;
     reg [DATA_WIDTH-1:0] mdr_in;
     register #(DATA_WIDTH) mdr_inst (clk, rst_n, mdr_cl, mdr_ld, mdr_in, mdr_inc, mdr_dec, mdr_sr, mdr_ir, mdr_sl, mdr_il, data);
 
+    // ACC
     reg a_cl, a_ld, a_inc, a_dec, a_sr, a_ir, a_sl, a_il;
     reg [DATA_WIDTH-1:0] a_in;
     wire [DATA_WIDTH-1:0] a_out;
     register #(DATA_WIDTH) a_inst (clk, rst_n, a_cl, a_ld, a_in, a_inc, a_dec, a_sr, a_ir, a_sl, a_il, a_out);
 
+    // ALU
+    reg [2:0] oc;
+    wire [DATA_WIDTH-1:0] alu_out;
+    alu #(DATA_WIDTH) alu_inst (oc, a_out, data, alu_out);
+
+
+
+
+
     reg [7:0] state_reg, state_next;
     reg we_reg;
+    reg status_next;
     reg [DATA_WIDTH-1:0] out_reg, out_next;
     
     assign we = we_reg;
@@ -61,9 +78,11 @@ module cpu #(
     always @(posedge clk, negedge rst_n) begin
         if (!rst_n) begin
             state_reg <= setup;
+            status <= 0;
             out_reg <= {DATA_WIDTH{1'b1}};
         end else begin
             state_reg <= state_next;
+            status <= status_next;
             out_reg <= out_next;
         end
     end
@@ -108,10 +127,52 @@ module cpu #(
     localparam mov_12 = 61;
     localparam mov_13 = 62;
 
+    localparam add_decode_Y_0 = 100;
+    localparam add_decode_Y_1 = 101;
+    localparam add_decode_Y_2 = 102;
+    localparam add_decode_Y_3 = 103;
+    localparam add_decode_Y_4 = 104;
+    localparam add_decode_Y_5 = 105;
+    localparam add_decode_Y_6 = 106;
+
+    localparam add_decode_Z_0 = 110;
+    localparam add_decode_Z_1 = 111;
+    localparam add_decode_Z_2 = 112;
+    localparam add_decode_Z_3 = 113;
+    localparam add_decode_Z_4 = 114;
+    localparam add_decode_Z_5 = 115;
+    localparam add_decode_Z_6 = 116;
+    localparam add_decode_Z_7 = 117;
+    localparam add_decode_Z_8 = 118;
+
+    localparam add_exec_0 = 120;
+    localparam add_exec_1 = 121;
+    localparam add_exec_2 = 122;
+
+    localparam stop_0 = 140;
+    localparam stop_1 = 141;
+    localparam stop_2 = 142;
+    localparam stop_3 = 143;
+    localparam stop_4 = 144;
+    localparam stop_5 = 145;
+    localparam stop_6 = 146;
+    localparam stop_7 = 147;
+    localparam stop_8 = 148;
+    localparam stop_9 = 159;
+
+    localparam error8 = 247;
+    localparam error7 = 248;
+    localparam error6 = 249;
+    localparam error5 = 250;
+    localparam error4 = 251;
+    localparam error3 = 252;
+    localparam error2 = 253;
+    localparam error1 = 254;
     localparam error = 255;
 
     always @(*) begin
         state_next = state_reg;
+        status_next = status;
         out_next = out_reg;
 
         pc_cl = 0;
@@ -187,7 +248,7 @@ module cpu #(
                 state_next = fetch_0;
             end
             fetch_0: begin
-                out_next = 0;
+                //out_next = 0;
                 mar_in = pc;
                 mar_ld = 1;
                 pc_inc = 1;
@@ -210,7 +271,7 @@ module cpu #(
                 state_next = fetch_4;
             end
             fetch_4: begin
-                out_next = ir_out[15:8];
+                //out_next = ir_out[15:8];
                 case (opcode)
                     IN: begin
                         state_next = in_0;
@@ -221,15 +282,28 @@ module cpu #(
                     MOV: begin
                         state_next = mov_0;
                     end
+                    ADD,SUB,MUL: begin
+                        state_next = add_decode_Y_0;
+                    end
+                    STOP: begin
+                        state_next = stop_0;
+                    end
                     default: state_next = error;
                 endcase
             end
+
+
+
+
+
             in_0: begin
+                status_next = 1'b1;
                 a_in = in;
                 a_ld = 1;
                 state_next = in_11;
             end
             in_11: begin
+                status_next = 1'b0;
                 mar_in = operandX_addr;
                 mar_ld = 1;
                 if (operandX_indirect == 0) begin
@@ -242,7 +316,7 @@ module cpu #(
                 end
             end
             in_1: begin
-                out_next = a_out[7:0];
+                //out_next = a_out[7:0];
                 we_reg = 1;
                 state_next = in_2;
             end
@@ -268,6 +342,10 @@ module cpu #(
                 mdr_ld = 1;
                 state_next = in_1; 
             end
+
+
+
+
             out_0: begin
                 mar_in = operandX_addr;
                 mar_ld = 1;
@@ -299,11 +377,16 @@ module cpu #(
                 mdr_ld = 1;
                 state_next = out_3;
             end
+
+
             out_3: begin
                 a_in = data;
                 a_ld = 1;
-
-                state_next = out_4;
+                if (opcode == STOP) begin
+                    state_next = stop_1;
+                end else begin
+                    state_next = out_4;
+                end
             end
 
             out_4: begin
@@ -312,11 +395,15 @@ module cpu #(
                 state_next = fetch_0;
             end
 
+
+
+
+
             mov_0: begin
                 if (operandZ_addr == 3'b000 && operandZ_indirect == 1'b0) begin
                     state_next = mov_1;
                 end else begin
-                    state_next = error;
+                    state_next = error1;
                 end
             end
             mov_1: begin
@@ -339,7 +426,11 @@ module cpu #(
             mov_4: begin
                 a_in = data;
                 a_ld = 1;
-                state_next = in_11;
+                if (opcode == STOP) begin
+                    state_next = stop_3;
+                end else begin
+                    state_next = in_11;
+                end
             end
             mov_5: begin
                 mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
@@ -354,13 +445,166 @@ module cpu #(
                 mdr_ld = 1;
                 state_next = mov_4;
             end
+
+
+
+
+
+
+            add_decode_Y_0: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, operandY_addr};
+                mar_ld = 1;
+                state_next = add_decode_Y_1;
+            end
+
+            add_decode_Y_1: begin
+                state_next = add_decode_Y_2;
+            end
+
+            add_decode_Y_2: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                if (operandY_indirect == 0) begin
+                    state_next = add_decode_Y_3;
+                end else begin
+                    state_next = add_decode_Y_4;
+                end
+            end
+
+            add_decode_Y_3: begin
+                a_in = data;
+                a_ld = 1;
+                state_next = add_decode_Z_0;
+            end
+
+            add_decode_Y_4: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
+                mar_ld = 1;
+                state_next = add_decode_Y_5;
+            end
+            add_decode_Y_5: begin
+                state_next = add_decode_Y_6;
+            end
+
+            add_decode_Y_6: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                state_next = add_decode_Y_3;
+            end
+
+
+
+            add_decode_Z_0: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, operandZ_addr};
+                mar_ld = 1;
+                state_next = add_decode_Z_1;
+            end
+
+            add_decode_Z_1: begin
+                state_next = add_decode_Z_2;
+            end
+
+            add_decode_Z_2: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                if (operandZ_indirect) begin
+                    state_next = add_decode_Z_3;
+                end else begin
+                    state_next = add_exec_0;
+                end
+            end
+
+            add_decode_Z_3: begin
+                mar_in = {{(ADDR_WIDTH-3){1'b0}}, data[2:0]};
+                mar_ld = 1;
+                state_next = add_decode_Z_4;
+            end
+
+            add_decode_Z_4: begin
+                state_next = add_decode_Z_5;
+            end
+
+            add_decode_Z_5: begin
+                mdr_in = mem;
+                mdr_ld = 1;
+                state_next = add_exec_0;
+            end
+
+
+
+
+
+
+            add_exec_0: begin
+                //out_next = a_out;
+                oc = opcode[2:0] - 1;
+                state_next = add_exec_1;
+            end
+            add_exec_1: begin
+                //out_next = data;
+                a_in = alu_out;
+                a_ld = 1;
+                state_next = add_exec_2;
+            end  
+
+            add_exec_2: begin
+                //out_next = a_out;
+                state_next = in_11;
+            end
+
+
+            stop_0: begin
+                if (operandX_addr != 0 || operandX_indirect != 0) begin
+                    state_next = out_0;
+                end else begin
+                    state_next = stop_2;
+                end
+            end
+
+            stop_1: begin
+                out_next = a_out;
+                state_next = stop_2;
+            end
+
+            stop_2: begin
+                if (operandY_addr != 0 || operandY_indirect != 0) begin
+                    state_next = mov_1;
+                end else begin
+                    state_next = stop_4;
+                end
+            end
+
+            stop_3: begin
+                out_next = a_out;
+                state_next = stop_4;
+            end
+
+            stop_4: begin
+                state_next = stop_4;
+            end
+
+
+
+
             error: begin
                 out_next = 10'b1100000000;
                 state_next = error;
             end
+            error1: begin
+                out_next = 10'b1100000001;
+                state_next = error1;
+            end
+            error2: begin
+                out_next = 10'b1100000010;
+                state_next = error2;
+            end
+            error3: begin
+                out_next = 10'b1100000011;
+                state_next = error3;
+            end
             default: begin
                 out_next = 10'b1010101010;
-                state_next = 254;
+                state_next = error;
             end
         endcase
 
