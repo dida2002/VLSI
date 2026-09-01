@@ -9,7 +9,7 @@ module top #(
     input [1:0] kbd,
     input [2:0] btn,
     input [8:0] sw,
-    output [8:0] mnt,
+    output [13:0] mnt,
     output [9:0] led,
     output [27:0] hex
 );
@@ -39,11 +39,13 @@ module top #(
     wire [ADDR_WIDTH - 1:0] sp;
     wire [DATA_WIDTH - 1:0] cpu_in = {{(DATA_WIDTH-4){1'b0}}, sw[3:0]};
     wire cpu_status;
+    wire cpu_control;
     cpu #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)) cpu_inst (
         .clk(clk_1),
         .rst_n(rst_n),
         .mem(mem_out),
         .in(cpu_in),
+        .control(cpu_control),
         .status(cpu_status),
         .we(we),
         .addr(addr),
